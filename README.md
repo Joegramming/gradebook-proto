@@ -198,6 +198,22 @@ flag is not restored** — excused cells export blank and re-import as "not grad
 yet". Always creates a new subject (delete the old one yourself if replacing);
 confirm dialog first.
 
+If the file isn't this app's own export layout, `parseClassRecord` falls back
+to a **legacy parser** that reads a hand-built school template directly off its
+live grading formulas instead of fixed positions — it looks for the transmuted-%
+formula (`<total>*50/$<col>$<row>+50`), the weighted-score formula
+(`<pct>*$<col>$<row>`), and a final-grade average (`(a+b+c)/3`, or a fallback
+sum of known weighted columns) to work out categories, items, and term grouping;
+student rows are then read straight off the name column regardless of which
+rows still carry live formulas (real sheets often only keep formulas on the
+first row or two, the rest pasted values). One subject is created **per
+worksheet** that matches. This is a best-effort reconstruction of a spreadsheet
+the app didn't build — every result carries a warning to spot-check scores
+after importing, plus any grade component the term-grouping guess couldn't
+place (filed under Prelims). A blank template, or one with formulas stripped
+to typed-in numbers, can't be read this way — there's no structure left to
+detect.
+
 **Export class record (.xlsx)** — `xlsx.js` via `exceljs`, lazy-loaded.
 `A1:A9` course block — `A3`/`A4` are the subject's **semester** label + school
 year, the rest from `subject.course`; then period / category / assignment-name /

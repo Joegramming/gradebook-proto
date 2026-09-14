@@ -124,60 +124,73 @@ export function initPortIO() {
   });
 }
 
-/** Rebuild a whole subject from an exported class-record .xlsx. */
+/** Rebuild one or more subjects from a class-record .xlsx (one per matching sheet). */
 async function importClassRecord(file) {
   showToast('Reading the Excel file…');
-  let draft;
+  let results;
   try {
     const { parseClassRecord } = await import('./xlsx.js');
-    draft = await parseClassRecord(await file.arrayBuffer());
+    results = await parseClassRecord(await file.arrayBuffer());
   } catch (e) {
     console.error('Class-record import failed', e);
     showToast(e.message || 'Could not read that Excel file', 'error');
     return;
   }
 
-  const hint = draft.semesterHint || { label: '', schoolYear: '' };
-  delete draft.semesterHint;
-
-  // find or create the semester this record belongs to (blanks -> "Unsorted")
-  const sy = hint.schoolYear || 'Unsorted';
-  const lb = hint.label || 'Unsorted';
-  let sem = state.semesters.find(s => s.schoolYear === sy && s.label === lb);
-  const createdSem = !sem;
-  if (!sem) {
-    sem = createSemester({ schoolYear: sy, label: lb });
-    state.semesters.push(sem);
+  // find or create the semester each record belongs to (blanks -> "Unsorted"),
+  // reusing one new semester across results that share the same hint
+  const createdSemIds = new Set();
+  for (const r of results) {
+    const hint = r.subject.semesterHint || { label: '', schoolYear: '' };
+    delete r.subject.semesterHint;
+    const sy = hint.schoolYear || 'Unsorted';
+    const lb = hint.label || 'Unsorted';
+    let sem = state.semesters.find(s => s.schoolYear === sy && s.label === lb);
+    if (!sem) {
+      sem = createSemester({ schoolYear: sy, label: lb });
+      state.semesters.push(sem);
+      createdSemIds.add(sem.id);
+    }
+    r.subject.semesterId = sem.id;
+    r.sem = sem;
   }
-  draft.semesterId = sem.id;
 
-  const nStu = draft.students.length;
-  const nAsg = TERMS.reduce((n, t) => n + draft.terms[t].assignments.length, 0);
-  const nScore = Object.keys(draft.scores).length;
+  const lines = results.length > 1
+    ? [`Creates ${results.length} new subjects from ${results.length} sheets:`]
+    : ['Import this class record?'];
+  for (const r of results) {
+    const { subject, warnings, sem } = r;
+    const nStu = subject.students.length;
+    const nAsg = TERMS.reduce((n, t) => n + subject.terms[t].assignments.length, 0);
+    const nScore = Object.keys(subject.scores).length;
+    lines.push('');
+    lines.push(`${subjectLabel(subject)} — ${semesterLabel(sem)}`);
+    lines.push(`• ${nStu} student${nStu === 1 ? '' : 's'}, ${nAsg} assignment${nAsg === 1 ? '' : 's'}, ${nScore} score${nScore === 1 ? '' : 's'}`);
+    for (const w of warnings) lines.push(`⚠ ${w}`);
+  }
+  lines.push('');
+  lines.push('Excused marks are not restored — blank cells import as "not graded yet".');
 
   const ok = await confirmAction({
-    title: 'Import this class record?',
-    messageLines: [
-      `Creates a new subject: ${subjectLabel(draft)}`,
-      `Semester: ${semesterLabel(sem)}`,
-      `• ${nStu} student${nStu === 1 ? '' : 's'}`,
-      `• ${nAsg} assignment${nAsg === 1 ? '' : 's'} across the 3 terms`,
-      `• ${nScore} score${nScore === 1 ? '' : 's'}`,
-      'Excused marks are not restored — blank cells import as "not graded yet".'
-    ],
-    confirmLabel: 'Create subject',
+    title: results.length > 1 ? 'Import these class records?' : 'Import this class record?',
+    messageLines: lines,
+    confirmLabel: results.length > 1 ? `Create ${results.length} subjects` : 'Create subject',
     cancelLabel: 'Cancel'
   });
   if (!ok) {
-    if (createdSem) state.semesters = state.semesters.filter(s => s.id !== sem.id);
+    state.semesters = state.semesters.filter(s => !createdSemIds.has(s.id));
     return;
   }
 
-  state.subjects.push(draft);
-  state.activeSemesterId = sem.id;
-  state.activeSubjectId = draft.id;
+  for (const r of results) state.subjects.push(r.subject);
+  const last = results[results.length - 1];
+  state.activeSemesterId = last.sem.id;
+  state.activeSubjectId = last.subject.id;
   reconcileState();
   scheduleSave('Class record imported');
   requestRender();
-  showToast(`Imported ${subjectLabel(draft)} — ${nStu} students`);
+  const totalStu = results.reduce((n, r) => n + r.subject.students.length, 0);
+  showToast(results.length > 1
+    ? `Imported ${results.length} subjects — ${totalStu} students`
+    : `Imported ${subjectLabel(last.subject)} — ${totalStu} students`);
 }
