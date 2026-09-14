@@ -188,40 +188,57 @@ Assignment columns with no name match in that term are reported and skipped —
 CSV import never creates categories or assignments. Nothing is written until you
 confirm the summary dialog.
 
-**Import a `.xlsx` class record** (`xlsx.js` → `parseClassRecord`) — rebuilds a
-**whole new subject** from an exported (and possibly Excel-edited) class record:
-course block, and for each period its categories (name + weight), assignments
-(name + date + max), students, and scores. `A3`/`A4` become a `semesterHint`;
-`portio.js` finds or creates the matching semester and files the new subject
-under it. The formula columns are ignored (the app recomputes). The **"excused"
-flag is not restored** — excused cells export blank and re-import as "not graded
-yet". Always creates a new subject (delete the old one yourself if replacing);
-confirm dialog first.
+**Import a `.xlsx` class record** (`xlsx.js` → `parseClassRecord`) — rebuilds
+**one new subject per worksheet** that looks like a class record; nothing is
+written until you confirm a summary dialog listing every subject it found
+(`portio.js`). Two ways a sheet can match:
 
-If the file isn't this app's own export layout, `parseClassRecord` falls back
-to a **legacy parser** that reads a hand-built school template directly off its
-live grading formulas instead of fixed positions — it looks for the transmuted-%
-formula (`<total>*50/$<col>$<row>+50`), the weighted-score formula
-(`<pct>*$<col>$<row>`), and a final-grade average (`(a+b+c)/3`, or a fallback
-sum of known weighted columns) to work out categories, items, and term grouping;
-student rows are then read straight off the name column regardless of which
-rows still carry live formulas (real sheets often only keep formulas on the
-first row or two, the rest pasted values). One subject is created **per
-worksheet** that matches. This is a best-effort reconstruction of a spreadsheet
-the app didn't build — every result carries a warning to spot-check scores
-after importing, plus any grade component the term-grouping guess couldn't
-place (filed under Prelims). A blank template, or one with formulas stripped
-to typed-in numbers, can't be read this way — there's no structure left to
-detect.
+- **Strict** — a file this app's *old* (pre-legacy-format) exporter wrote,
+  optionally edited in Excel: fixed header rows, course block, one student per
+  row. Kept only so files exported before the current format shipped still
+  re-import losslessly; the current exporter no longer produces this layout.
+- **Legacy** — everything else, *including this app's current export* — a
+  hand-built-looking school grade sheet with no fixed layout to rely on, read
+  straight off its live grading formulas instead: the transmuted-%
+  formula (`<total>*50/$<col>$<row>+50`), the weighted-score formula
+  (`<pct>*$<col>$<row>`), and a final-grade average (`(a+b+c)/3`, or a fallback
+  sum of known weighted columns) work out categories, items, and term grouping;
+  student rows are read straight off the name column regardless of which rows
+  still carry live formulas (real sheets often only keep formulas on the first
+  row or two, the rest pasted values). This is a best-effort reconstruction —
+  every result carries a warning to spot-check scores after importing, plus
+  any grade component the term-grouping guess couldn't place (filed under
+  Prelims). A blank template, or one with formulas stripped to typed-in
+  numbers, can't be read this way — there's no structure left to detect.
 
-**Export class record (.xlsx)** — `xlsx.js` via `exceljs`, lazy-loaded.
-`A1:A9` course block — `A3`/`A4` are the subject's **semester** label + school
-year, the rest from `subject.course`; then period / category / assignment-name /
-assignment-date / max+weight header rows; one student per row from row 16. Per category:
-`raw… → Total → % → Weighted`, then a period Grade column, then Final Grade +
-Letter. Every computed cell is a **live Excel formula** (the `%` uses
-`SUMPRODUCT` so blank cells stay excluded from the max, matching the app).
-Categories with no assignments are skipped.
+Either way: the semester-label cell becomes a `semesterHint`, and `portio.js`
+finds or creates the matching semester and files each new subject under it.
+Formula columns are always ignored on import (the app recomputes). The
+**"excused" flag is not restored** — excused cells export blank and re-import
+as "not graded yet".
+
+**Export class record (.xlsx)** — `xlsx.js` via `exceljs`, lazy-loaded. The
+layout deliberately mirrors the client's own hand-built template
+(`docs/sample-sheet.xlsx`) rather than a self-documenting one, so an exported
+file looks like a sheet she could have built herself: `A1:A6` course block
+(code / name / semester label / school year / schedule / set — no course
+year, instructor, or program chair, since her sheet has no room for them),
+then per period a category-name row, an assignment-label row (an item's date
+if it has one, else its name — the two share one cell), and a max-points +
+weight row; students from the row after that, name in column C. Per category:
+`raw… → Total (skipped for a single-item category — the raw cell doubles as
+the total) → % → Weighted`, then a period-grade column (skipped for a period
+with nothing graded), then a Final Grade column once all three periods have
+one. Every computed cell is a **live Excel formula**, matching hers: the `%`
+is a plain division against the category's fixed max, **not re-normalised**
+for missing scores — an only-partly-graded category understates % in the live
+formula until every item is filled in (the app's own displayed grades are
+unaffected; only the spreadsheet's own formula preview behaves this way, same
+as a real hand-built sheet). Categories with no assignments are skipped.
+Matching her layout costs the fields it has no room for: course year,
+instructor, program chair, and a Letter column don't get written, so a
+plain export → re-import round trip loses them (fill them back in on the
+subject afterward) — everything else round-trips through the legacy reader.
 
 **Export grade sheet (.docx)** — `gradesheet.js` via the `docx` lib,
 lazy-loaded. Follows `docs/sample-doc.doc`: letterhead (logo + institution +

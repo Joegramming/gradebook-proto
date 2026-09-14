@@ -39,35 +39,36 @@ async function readBack(blob) {
 }
 
 describe('buildClassRecordBlob', () => {
-  it('writes the A1:A9 course block (A3/A4 from the semester) and STUDENT header', async () => {
+  it('writes the A1:A6 course block (A3/A4 from the semester) and the NAMES column (C)', async () => {
     const ws = await readBack(await buildClassRecordBlob(subject(), semester()));
     expect(ws.getCell('A1').value).toBe('ITP 112');
     expect(ws.getCell('A2').value).toBe('SYSTEMS ANALYSIS AND DESIGN');
     expect(ws.getCell('A3').value).toBe('SECOND SEMESTER');   // semester.label
     expect(ws.getCell('A4').value).toBe('SY 2025-2026');       // semester.schoolYear
     expect(ws.getCell('A6').value).toBe('SET A');
-    expect(ws.getCell('A7').value).toBe('BSIT II-B');
-    expect(ws.getCell('A9').value).toBe('ENGR. ELIAS D. EDAN JR.');
-    expect(ws.getCell('A15').value).toBe('STUDENT');
-    expect(ws.getCell('A16').value).toBe('AGUSTIN, EIAN');
+    expect(ws.getCell('C10').value).toBe('NAMES');
+    expect(ws.getCell('C11').value).toBe('AGUSTIN, EIAN');
   });
 
-  it('separates assignment name (row 13) and date (row 14); max/weight on row 15', async () => {
+  it('shares one label cell per item (date wins over name), category name on row 8, max/weight on row 10', async () => {
     const ws = await readBack(await buildClassRecordBlob(subject(), semester()));
-    expect(ws.getCell('B13').value).toBe('Attendance');
-    expect(ws.getCell('C13').value).toBe('Recitation');
-    expect(ws.getCell('B14').value).toBe('1/12');       // date row
-    expect(ws.getCell('C14').value).toBeNull();          // no date
-    expect(ws.getCell('B15').value).toBe(10);            // max
-    expect(ws.getCell('G15').value).toBe(75);
-    expect(ws.getCell('F15').value).toBeCloseTo(0.4);    // Class Standing weight
-    expect(ws.getCell('J15').value).toBeCloseTo(0.6);    // Exam weight
+    expect(ws.getCell('D8').value).toBe('Class Standing');
+    expect(ws.getCell('I8').value).toBe('Exam');
+    expect(ws.getCell('D9').value).toBe('1/12');          // Attendance has a date -> date wins
+    expect(ws.getCell('E9').value).toBe('Recitation');    // Recitation has no date -> falls back to name
+    expect(ws.getCell('D10').value).toBe(10);              // Attendance max
+    expect(ws.getCell('I10').value).toBe(75);              // Prelim Exam max (single-item category)
+    expect(ws.getCell('H10').value).toBeCloseTo(0.4);      // Class Standing weight
+    expect(ws.getCell('K10').value).toBeCloseTo(0.6);      // Exam weight
 
-    expect(ws.getCell('B16').value).toBe(9);             // s1 Attendance score
-    expect(ws.getCell('C16').value).toBeNull();          // s1 Recitation ungraded
-    expect(ws.getCell('D16').value.formula).toBe('SUM(B16:C16)');
-    expect(ws.getCell('K16').value.formula).toBe('F16+J16');   // PRELIMS GRADE
-    expect(ws.getCell('N16').value.formula).toContain('/3');   // FINAL GRADE
+    expect(ws.getCell('D11').value).toBe(9);               // s1 Attendance score
+    expect(ws.getCell('E11').value).toBeNull();             // s1 Recitation ungraded
+    expect(ws.getCell('F11').value.formula).toBe('SUM(D11:E11)');   // Total (2+ items)
+    expect(ws.getCell('I11').value).toBe(60);               // single-item category: raw IS the total
+    expect(ws.getCell('J11').value.formula).toBe('I11*50/$I$10+50');
+    expect(ws.getCell('L11').value.formula).toBe('H11+K11');        // PRELIMS GRADE
+    // midterms/finals have no categories in this fixture -> no FINAL GRADE column
+    expect(ws.getCell('M8').value).toBeNull();
   });
 });
 
@@ -77,25 +78,32 @@ describe('parseClassRecord — round-trip', () => {
     const results = await parseClassRecord(await blob.arrayBuffer());
     expect(results).toHaveLength(1);
     const { subject: draft, warnings } = results[0];
-    expect(warnings).toEqual([]);
+    // the export's own layout is read back through the legacy (formula-based)
+    // path, same as any other hand-built-looking sheet — so it carries the
+    // usual spot-check warning rather than round-tripping losslessly
+    expect(warnings.length).toBeGreaterThan(0);
 
-    expect(draft.course).toEqual(subject().course);
+    // course year / instructor / program chair have no cell in this layout
+    // (same as the client's own template) and don't survive re-import
+    expect(draft.course).toEqual({ ...subject().course, courseYear: '', instructor: '', programChair: '' });
     expect(draft.semesterHint).toEqual({ label: 'SECOND SEMESTER', schoolYear: 'SY 2025-2026' });
     expect(draft.students.map(s => s.name)).toEqual(['AGUSTIN, EIAN', 'ALON, MARLON']);
 
     const pcats = draft.terms.prelims.categories;
     expect(pcats.map(c => [c.name, c.weight])).toEqual([['Class Standing', 40], ['Exam', 60]]);
 
+    // name and date share one cell in this layout: a dated item's date wins
+    // over its name (Attendance -> "1/12"); an undated item keeps its name
     const pasg = draft.terms.prelims.assignments;
     expect(pasg.map(a => [a.name, a.max, a.date])).toEqual([
-      ['Attendance', 10, '1/12'],
+      ['1/12', 10, '1/12'],
       ['Recitation', 10, ''],
       ['Prelim Exam', 75, '']
     ]);
     // assignments linked to the right (regenerated) category ids
     const csId = pcats.find(c => c.name === 'Class Standing').id;
     const exId = pcats.find(c => c.name === 'Exam').id;
-    expect(pasg.find(a => a.name === 'Attendance').categoryId).toBe(csId);
+    expect(pasg.find(a => a.name === '1/12').categoryId).toBe(csId);
     expect(pasg.find(a => a.name === 'Prelim Exam').categoryId).toBe(exId);
 
     expect(draft.terms.midterms.assignments).toEqual([]);
@@ -103,7 +111,7 @@ describe('parseClassRecord — round-trip', () => {
 
     // scores re-linked by the new ids
     const ada = draft.students.find(s => s.name === 'AGUSTIN, EIAN').id;
-    const att = pasg.find(a => a.name === 'Attendance').id;
+    const att = pasg.find(a => a.name === '1/12').id;
     const exam = pasg.find(a => a.name === 'Prelim Exam').id;
     expect(draft.scores[`${ada}_${att}`]).toEqual({ score: 9, excused: false });
     expect(draft.scores[`${ada}_${exam}`]).toEqual({ score: 60, excused: false });
@@ -215,6 +223,6 @@ describe('parseClassRecord — legacy (hand-built) sheet', () => {
     expect(subject.scores[`${s2.id}_${quizAsg[0].id}`].score).toBe(7);
     expect(subject.scores[`${s2.id}_${quizAsg[1].id}`].score).toBe(8);
 
-    expect(warnings.some(w => /didn't create/i.test(w))).toBe(true);
+    expect(warnings.some(w => /spot-check/i.test(w))).toBe(true);
   });
 });
