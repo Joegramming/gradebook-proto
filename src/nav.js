@@ -19,6 +19,12 @@ export function initNav() {
       document.getElementById('page-' + page).style.display = 'block';
       document.getElementById('topbarHint').textContent = TOPBAR_HINTS[page];
 
+      // Pages vary a lot in height (e.g. a tall Setup vs. a short Grades).
+      // Without this, staying scrolled down on the old page can leave the
+      // sticky sidebar's container shorter than the scroll offset, so part
+      // of it ends up stuck above the viewport on the new page.
+      window.scrollTo(0, 0);
+
       // These two are cheap to redraw and always want the latest numbers.
       if (page === 'grades') renderGradesMatrix();
       if (page === 'reports') renderReports();
