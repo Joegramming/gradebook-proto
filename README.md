@@ -56,7 +56,7 @@ src/
   semesters.js        School Year / Semester switchers + add (with carry-forward) / rename / delete
   subjects.js         subject switcher (filtered to the active semester) + course-details fields
   terms.js            the Prelims / Midterms / Finals switch
-  students.js         student list + search (name + sex)
+  students.js         student list + search
   categories.js       per-term categories, weights, weight bar
   assignments.js      per-term assignments + the category dropdown
   grades.js           the score matrix (per term)
@@ -128,7 +128,7 @@ module knows the difference — the `load()` / `save()` seam is the whole contra
     semesterId,                                     // which semester it belongs to
     // plain strings; courseYear / instructor / programChair feed the Word grade sheet
     course: { code, name, schedule, set, courseYear, instructor, programChair },
-    students: [{ id, name, sex }],                                  // sex: '' | 'M' | 'F'
+    students: [{ id, name, remarksOverride }],       // see "Grading rules" below
     terms: {
       prelims:  { categories: [{ id, name, weight }], assignments: [{ id, name, categoryId, max, date }] },
       midterms: { /* same shape */ },
@@ -164,11 +164,23 @@ Follows the client's class-record scheme (see `docs/sample-sheet.xlsx`).
 - Scores above an assignment's max are kept (extra credit) but the box turns
   red so a typo stands out.
 - Letters (Reports page): A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, else F.
-- **Equivalent** (1.00–5.00) and **Remarks** (Passed / Failed / Incomplete) for
-  the registrar grade sheet come from the rounded final grade —
-  `gradeEquivalent()` / `gradeRemarks()` in `grading.js`. ⚠ The equivalent band
-  table there is **provisional** (extrapolated from `docs/sample-doc.doc`);
-  swap in the school's official conversion table before relying on it.
+- **Equivalent** (1.00–5.00) and **Remarks** (Passed / Conditional / Failed /
+  Dropped / Incomplete) for the registrar grade sheet come from the rounded
+  final grade — `gradeEquivalent()` / `gradeRemarks()` in `grading.js`. The
+  band table matches the school's own "GRADING SYSTEM" card: 99-100→1.00 down
+  to 75-77→3.00 in quarter-point steps, 72-74→4.00 ("Conditional"), else
+  5.00 ("Failed").
+- **Remarks / notes** (`student.remarksOverride`) is one free-text field per
+  student, edited inline on the Setup page (Students card) — no score is
+  derived from it. It does double duty: it's also the grade sheet's Remarks
+  column. Blank leaves Remarks auto-computed as above; typing anything
+  (a private note, or `Dropped`, `Transferred`, `LOA`, ...) replaces the
+  Remarks column with that text verbatim, regardless of the student's
+  computed grade. `isDropped()` in `grading.js` is the one place that decides
+  whether text counts as "dropped" (case-insensitive, exact match on
+  `Dropped`) — it drives both the Setup page's strikethrough on that
+  student's name and Equivalent → `0.00` (the school's table gives no number
+  for any other override, so those leave Equivalent blank).
 
 ## Import / export
 
@@ -243,7 +255,7 @@ subject afterward) — everything else round-trips through the legacy reader.
 **Export grade sheet (.docx)** — `gradesheet.js` via the `docx` lib,
 lazy-loaded. Follows `docs/sample-doc.doc`: letterhead (logo + institution +
 document-control box + "GRADE SHEET") in the page header; course-info block;
-table `Seq. | Names | Sex | Final Grade | Equivalent | Remarks` (students sorted
+table `Seq. | Names | Final Grade | Equivalent | Remarks` (students sorted
 by name) then a centred "Nothing Follows" row; the fixed 6-item instructions
 list; a "Prepared by" (instructor) / "Verified by" (program chair) signature
 block. Final Grade / Equivalent / Remarks come from `grading.js`.

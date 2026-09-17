@@ -50,7 +50,7 @@ export function renderReports() {
 
     return `<div class="grade-card">
       <div>
-        <div class="name">${escapeHtml(s.name)}</div>
+        <div class="name">${escapeHtml(s.name)}${s.remarksOverride ? ` <span style="color:var(--warn);font-weight:600;">— ${escapeHtml(s.remarksOverride.toUpperCase())}</span>` : ''}</div>
         <div class="breakdown">${breakdown}</div>
       </div>
       <div style="text-align:right;">

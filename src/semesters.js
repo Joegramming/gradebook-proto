@@ -35,7 +35,7 @@ export function initSemesters() {
 /** Deep-copy a subject's structure into a new semester, scores blanked. */
 function cloneStructure(src, semesterId) {
   const s = createSubject(src.course, semesterId);
-  s.students = src.students.map(st => ({ id: uid(), name: st.name, sex: st.sex || '' }));
+  s.students = src.students.map(st => ({ id: uid(), name: st.name }));
   for (const tk of TERMS) {
     const catMap = new Map();
     s.terms[tk].categories = src.terms[tk].categories.map(c => {

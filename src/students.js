@@ -2,17 +2,10 @@ import { getActiveSubject, scheduleSave } from './state.js';
 import { requestRender } from './bus.js';
 import { uid, escapeHtml } from './utils.js';
 import { confirmAction } from './dialog.js';
+import { isDropped } from './grading.js';
 
 let search = '';
 let editingId = null;
-
-const SEX_OPTS = ['', 'M', 'F'];
-
-function sexSelect(value, attr) {
-  return `<select class="edit-input" ${attr} style="width:64px;">` +
-    SEX_OPTS.map(o => `<option value="${o}" ${o === (value || '') ? 'selected' : ''}>${o || '—'}</option>`).join('') +
-    `</select>`;
-}
 
 export function initStudents() {
   document.getElementById('addStudentBtn').addEventListener('click', addStudent);
@@ -35,6 +28,19 @@ export function initStudents() {
     if (action === 'cancel') cancelEdit();
     if (action === 'remove') removeStudent(id);
   });
+  list.addEventListener('change', e => {
+    const el = e.target;
+    if (el.matches('[data-field]')) setField(el.dataset.id, el.dataset.field, el.value.trim());
+  });
+  // Live strikethrough as you type "Dropped" — a direct style tweak, not a
+  // re-render, so it doesn't fight the browser mid-keystroke.
+  list.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.matches('[data-field="remarksOverride"]')) return;
+    const nameCell = el.closest('tr').querySelector('td');
+    nameCell.style.textDecoration = isDropped(el.value) ? 'line-through' : '';
+    nameCell.style.color = isDropped(el.value) ? 'var(--ink-muted)' : '';
+  });
   list.addEventListener('keydown', e => {
     if (!editingId) return;
     if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
@@ -45,12 +51,10 @@ export function initStudents() {
 function addStudent() {
   const active = getActiveSubject();
   const input = document.getElementById('studentNameInput');
-  const sexInput = document.getElementById('studentSexInput');
   const name = input.value.trim();
   if (!name || !active) return;
-  active.students.push({ id: uid(), name, sex: sexInput.value });
+  active.students.push({ id: uid(), name });
   input.value = '';
-  sexInput.value = '';
   scheduleSave('Student added');
   requestRender();
 }
@@ -70,18 +74,26 @@ function cancelEdit() {
 function commitEdit() {
   const active = getActiveSubject();
   const nameField = document.querySelector('#studentList [data-edit-field="name"]');
-  const sexField = document.querySelector('#studentList [data-edit-field="sex"]');
   if (!active || !nameField) return;
   const name = nameField.value.trim();
   if (!name) { nameField.focus(); return; }
   const student = active.students.find(s => s.id === editingId);
-  if (student) {
-    student.name = name;
-    if (sexField) student.sex = sexField.value;
-  }
+  if (student) student.name = name;
   editingId = null;
   scheduleSave('Student updated');
   requestRender();
+}
+
+/** Remarks/notes: edited inline, no Edit-click needed. Saved on blur (not
+ * re-rendered) so tabbing away isn't interrupted by the row being redrawn
+ * out from under the browser's focus. */
+function setField(id, field, value) {
+  const active = getActiveSubject();
+  if (!active) return;
+  const student = active.students.find(s => s.id === id);
+  if (!student) return;
+  student[field] = value;
+  scheduleSave('Student updated');
 }
 
 async function removeStudent(id) {
@@ -125,10 +137,13 @@ export function renderStudents() {
 
   const filtered = active.students.filter(s => s.name.toLowerCase().includes(search));
   tbody.innerHTML = filtered.map(s => {
+    const remarksCell = `<td><input class="edit-input" type="text" value="${escapeHtml(s.remarksOverride || '')}"
+      placeholder="Notes or Remarks — e.g. Dropped" data-field="remarksOverride" data-id="${s.id}"></td>`;
+
     if (s.id === editingId) {
       return `<tr>
         <td><input class="edit-input" type="text" value="${escapeHtml(s.name)}" data-edit-field="name"></td>
-        <td>${sexSelect(s.sex, 'data-edit-field="sex"')}</td>
+        ${remarksCell}
         <td style="text-align:right;white-space:nowrap;">
           <button class="btn-icon save" data-action="save">✓ Save</button>
           <button class="btn-icon" data-action="cancel">Cancel</button>
@@ -136,8 +151,8 @@ export function renderStudents() {
       </tr>`;
     }
     return `<tr>
-      <td>${escapeHtml(s.name)}</td>
-      <td style="color:var(--ink-muted);">${escapeHtml(s.sex || '—')}</td>
+      <td${isDropped(s.remarksOverride) ? ' style="text-decoration:line-through;color:var(--ink-muted);"' : ''}>${escapeHtml(s.name)}</td>
+      ${remarksCell}
       <td style="text-align:right;white-space:nowrap;">
         <button class="btn-icon edit" data-action="edit" data-id="${s.id}">✎ Edit</button>
         <button class="btn-icon danger" data-action="remove" data-id="${s.id}">✕ Delete</button>

@@ -3,13 +3,12 @@
  *   - letterhead (logo + institution + document-control box + "GRADE SHEET"),
  *     repeated in the page header
  *   - course-info block
- *   - table: Seq. | Names | Sex | Final Grade | Equivalent | Remarks, then
+ *   - table: Seq. | Names | Final Grade | Equivalent | Remarks, then
  *     a centred "Nothing Follows" row
  *   - the fixed 6-item instructions list
  *   - "Prepared by" / "Verified by" signature block
  *
- * Final Grade / Equivalent / Remarks come from grading.js (the Equivalent table
- * there is PROVISIONAL — see its comment).
+ * Final Grade / Equivalent / Remarks come from grading.js.
  */
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -140,13 +139,13 @@ function courseInfo(course, semester) {
 }
 
 function gradeTable(subject) {
-  const widths = [820, 4193, 959, 1519, 1430, 1659];
+  const widths = [820, 5152, 1519, 1430, 1659];
   const total = widths.reduce((a, b) => a + b, 0);
   const C = AlignmentType.CENTER;
 
   const headRow = new TableRow({
     tableHeader: true,
-    children: ['Seq.', 'Names', 'Sex', 'Final Grade', 'Equivalent', 'Remarks']
+    children: ['Seq.', 'Names', 'Final Grade', 'Equivalent', 'Remarks']
       .map((t, i) => cell(para(t, { align: C, bold: true }), { width: widths[i] }))
   });
 
@@ -157,14 +156,13 @@ function gradeTable(subject) {
   const rows = students.map((s, i) => {
     const { final } = computeFinalGrade(subject, s.id);
     const fg = final === null ? '' : String(Math.round(final));
-    const eq = gradeEquivalent(final);
+    const eq = gradeEquivalent(final, s.remarksOverride);
     const cells = [
       String(i + 1),
       s.name,
-      s.sex || '',
       fg,
       eq === null ? '' : eq.toFixed(2),
-      gradeRemarks(final)
+      gradeRemarks(final, s.remarksOverride)
     ];
     return new TableRow({
       children: cells.map((t, ci) =>
@@ -174,7 +172,7 @@ function gradeTable(subject) {
   });
 
   const nothingRow = new TableRow({
-    children: [cell(para('Nothing Follows', { align: C, bold: true }), { colSpan: 6, width: total })]
+    children: [cell(para('Nothing Follows', { align: C, bold: true }), { colSpan: 5, width: total })]
   });
 
   return new Table({

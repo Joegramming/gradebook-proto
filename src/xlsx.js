@@ -281,7 +281,7 @@ function parseStrictSheet(ws) {
   for (let r = R_STU; r < R_STU + 5000; r++) {
     const name = cellText(ws, r, 1);
     if (!name) break;
-    students.push({ id: uid(), name, sex: '' });
+    students.push({ id: uid(), name });
   }
 
   const merges = parseMerges(ws);
@@ -532,7 +532,7 @@ function parseLegacySheet(ws) {
   if (!studentRows.length) return null;
 
   const { course, semesterHint } = readCourseBlock(ws);
-  const students = studentRows.map(r => ({ id: uid(), name: cellText(ws, r, nameCol), sex: '' }));
+  const students = studentRows.map(r => ({ id: uid(), name: cellText(ws, r, nameCol) }));
   const terms = {
     prelims: { categories: [], assignments: [] },
     midterms: { categories: [], assignments: [] },

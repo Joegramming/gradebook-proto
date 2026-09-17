@@ -33,8 +33,9 @@ function subject() {
       courseYear: 'BSIT II-B', instructor: 'Helen S. Duriguez', programChair: 'Engr. Elias D. Edan Jr.'
     },
     students: [
-      { id: 's1', name: 'ZAMORA, RICO', sex: 'M' },
-      { id: 's2', name: 'ABAD, MARIA', sex: 'F' }
+      { id: 's1', name: 'ZAMORA, RICO' },
+      { id: 's2', name: 'ABAD, MARIA' },
+      { id: 's3', name: 'CRUZ, JOSE', remarksOverride: 'Dropped' }
     ],
     terms: {
       prelims: { categories: [{ id: 'c', name: 'Q', weight: 100 }], assignments: [{ id: 'p', name: 'Q1', categoryId: 'c', max: 100 }] },
@@ -42,8 +43,10 @@ function subject() {
       finals: { categories: [{ id: 'c', name: 'Q', weight: 100 }], assignments: [{ id: 'f', name: 'Q1', categoryId: 'c', max: 100 }] }
     },
     scores: {
-      s1_p: { score: 80, excused: false }, s1_m: { score: 80, excused: false }, s1_f: { score: 80, excused: false }
+      s1_p: { score: 80, excused: false }, s1_m: { score: 80, excused: false }, s1_f: { score: 80, excused: false },
       // s2 has no scores -> Incomplete
+      s3_p: { score: 95, excused: false }, s3_m: { score: 95, excused: false }, s3_f: { score: 95, excused: false }
+      // s3 scored 95 but has a "Dropped" remarks override -> Dropped, regardless of score
     }
   };
 }
@@ -74,9 +77,12 @@ describe('buildGradeSheetBlob', () => {
     expect(body).toContain('School Year: 2025-2026');
     // students sorted by name -> ABAD before ZAMORA, seq 1 / 2
     expect(body.indexOf('ABAD, MARIA')).toBeLessThan(body.indexOf('ZAMORA, RICO'));
-    // s1 scored 80 in all three terms -> final 80 -> Passed; s2 -> Incomplete
+    // s1 scored 80 in all three terms -> final 80 -> Passed; s2 -> Incomplete;
+    // s3 scored 95 but is dropped -> Dropped/0.00 regardless of the score
     expect(body).toContain('Incomplete');
     expect(body).toContain('Passed');
+    expect(body).toContain('Dropped');
+    expect(body).toContain('0.00');
     expect(body).toContain('HELEN S. DURIGUEZ');
     expect(body).toContain('Instructions:');
 
