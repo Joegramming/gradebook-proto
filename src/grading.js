@@ -75,19 +75,32 @@ export function letterGrade(pct) {
 
 /**
  * Final grade (0–100) -> numeric equivalent (1.00–5.00) for the registrar's
- * grade sheet.
- *
- * ⚠ PROVISIONAL — extrapolated from `docs/sample-doc` (three-point bands). The
- * top end (1.00–1.50) is not in the sample and two rows there disagree with a
- * clean band. Replace with the school's official conversion table before the
- * client relies on it; keeping it here (one place) makes that a one-edit fix.
+ * grade sheet. Matches the school's own "GRADING SYSTEM" table (a photo the
+ * client provided) exactly: 99-100 -> 1.00 down to 75-77 -> 3.00 in
+ * quarter-point steps, then 72-74 -> 4.00 ("conditional"), then 5.00 for
+ * anything below that ("Failed"). 0 ("Dropped") isn't score-derived — see
+ * the `remarksOverride` param below.
  */
 export const EQUIVALENT_BANDS = [
   [99, 1.00], [96, 1.25], [93, 1.50], [90, 1.75], [87, 2.00],
-  [84, 2.25], [81, 2.50], [78, 2.75], [75, 3.00]
+  [84, 2.25], [81, 2.50], [78, 2.75], [75, 3.00], [72, 4.00]
 ];
 
-export function gradeEquivalent(finalGrade) {
+/** Whether a `remarksOverride` string specifically flags the student as dropped. */
+export function isDropped(remarksOverride) {
+  return (remarksOverride || '').trim().toLowerCase() === 'dropped';
+}
+
+/**
+ * `remarksOverride` is a free-text manual override (e.g. "Dropped",
+ * "Transferred", "LOA") for whatever the registrar needs that isn't just a
+ * computed grade — see `gradeRemarks`. The official table only gives a
+ * numeric equivalent for one such case ("Dropped" -> 0); anything else
+ * overridden has no known number, so it's left blank rather than guessed.
+ */
+export function gradeEquivalent(finalGrade, remarksOverride) {
+  const override = (remarksOverride || '').trim();
+  if (override) return isDropped(override) ? 0 : null;
   if (finalGrade === null || finalGrade === undefined) return null;
   const g = Math.round(finalGrade);
   for (const [min, eq] of EQUIVALENT_BANDS) {
@@ -97,10 +110,18 @@ export function gradeEquivalent(finalGrade) {
 }
 
 /**
- * Passed / Failed / Incomplete — uses the rounded final grade so it stays
- * consistent with the "Final Grade" and "Equivalent" columns on the sheet.
+ * Passed / Conditional / Failed / Incomplete by default, from the rounded
+ * final grade so it stays consistent with the "Final Grade" and
+ * "Equivalent" columns on the sheet — or `remarksOverride` verbatim
+ * (e.g. "Dropped", "Transferred", "LOA") when the teacher has set one; it
+ * wins over any computed grade.
  */
-export function gradeRemarks(finalGrade) {
+export function gradeRemarks(finalGrade, remarksOverride) {
+  const override = (remarksOverride || '').trim();
+  if (override) return override;
   if (finalGrade === null || finalGrade === undefined) return 'Incomplete';
-  return Math.round(finalGrade) >= 75 ? 'Passed' : 'Failed';
+  const g = Math.round(finalGrade);
+  if (g >= 75) return 'Passed';
+  if (g >= 72) return 'Conditional';
+  return 'Failed';
 }

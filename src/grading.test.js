@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeCategoryPct, computeTermGrade, computeFinalGrade, letterGrade,
-  gradeEquivalent, gradeRemarks
+  gradeEquivalent, gradeRemarks, isDropped
 } from './grading.js';
 
 /**
@@ -153,7 +153,7 @@ describe('computeFinalGrade', () => {
   });
 });
 
-describe('gradeEquivalent (PROVISIONAL table)', () => {
+describe('gradeEquivalent (school\'s official table)', () => {
   it('maps null (no final grade) to null', () => {
     expect(gradeEquivalent(null)).toBeNull();
   });
@@ -161,7 +161,7 @@ describe('gradeEquivalent (PROVISIONAL table)', () => {
   it.each([
     [100, 1.00], [99, 1.00], [96, 1.25], [93, 1.50], [90, 1.75],
     [87, 2.00], [84, 2.25], [81, 2.50], [78, 2.75], [75, 3.00],
-    [74, 5.00], [60, 5.00], [0, 5.00]
+    [74, 4.00], [72, 4.00], [71, 5.00], [60, 5.00], [0, 5.00]
   ])('final %d -> %f', (final, eq) => {
     expect(gradeEquivalent(final)).toBe(eq);
   });
@@ -170,15 +170,58 @@ describe('gradeEquivalent (PROVISIONAL table)', () => {
     expect(gradeEquivalent(89.6)).toBe(1.75); // rounds to 90
     expect(gradeEquivalent(89.4)).toBe(2.00); // rounds to 89
   });
+
+  it('an overridden "Dropped" remark is equivalent 0, regardless of any computed grade', () => {
+    expect(gradeEquivalent(95, 'Dropped')).toBe(0);
+    expect(gradeEquivalent(null, 'Dropped')).toBe(0);
+    expect(gradeEquivalent(95, 'dropped')).toBe(0); // case-insensitive
+  });
+
+  it('any other override has no known number, so it\'s left blank', () => {
+    expect(gradeEquivalent(95, 'Transferred')).toBeNull();
+    expect(gradeEquivalent(null, 'LOA')).toBeNull();
+  });
+
+  it('a blank/whitespace-only override is not an override', () => {
+    expect(gradeEquivalent(100, '   ')).toBe(1.00);
+  });
 });
 
 describe('gradeRemarks', () => {
   it('is Incomplete without a final grade', () => {
     expect(gradeRemarks(null)).toBe('Incomplete');
   });
-  it('uses the rounded grade — Passed at rounded >= 75, Failed below', () => {
-    expect(gradeRemarks(74.5)).toBe('Passed'); // rounds to 75
-    expect(gradeRemarks(74.4)).toBe('Failed'); // rounds to 74
+  it('uses the rounded grade — Passed >= 75, Conditional 72-74, Failed below 72', () => {
+    expect(gradeRemarks(74.5)).toBe('Passed');       // rounds to 75
+    expect(gradeRemarks(74.4)).toBe('Conditional');   // rounds to 74
+    expect(gradeRemarks(72)).toBe('Conditional');
+    expect(gradeRemarks(71.4)).toBe('Failed');         // rounds to 71
+  });
+  it('an override wins over any computed grade, verbatim (trimmed)', () => {
+    expect(gradeRemarks(95, 'Dropped')).toBe('Dropped');
+    expect(gradeRemarks(null, 'Transferred')).toBe('Transferred');
+    expect(gradeRemarks(60, '  LOA  ')).toBe('LOA');
+  });
+  it('a blank/whitespace-only override is not an override', () => {
+    expect(gradeRemarks(80, '   ')).toBe('Passed');
+  });
+});
+
+describe('isDropped', () => {
+  it('matches "Dropped" case-insensitively, trimmed', () => {
+    expect(isDropped('Dropped')).toBe(true);
+    expect(isDropped('dropped')).toBe(true);
+    expect(isDropped('  DROPPED  ')).toBe(true);
+  });
+  it('does not match a longer note that just happens to contain the word', () => {
+    expect(isDropped('Dropped mid-semester, family emergency')).toBe(false);
+  });
+  it('is false for blank, other overrides, and no value at all', () => {
+    expect(isDropped('')).toBe(false);
+    expect(isDropped('   ')).toBe(false);
+    expect(isDropped('Transferred')).toBe(false);
+    expect(isDropped(undefined)).toBe(false);
+    expect(isDropped(null)).toBe(false);
   });
 });
 
