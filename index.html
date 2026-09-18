@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-Bvq7_xzr.js"></script>
+  <script type="module" crossorigin src="./assets/index-_4fyDZZI.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-zOcU1kM6.css">
 </head>
 <body>
@@ -254,6 +254,65 @@
 </div>
 
 <div class="toast" id="toast">Saved</div>
+
+<!--
+  Soft client-side login gate — active only in the public GitHub Pages
+  preview build (the same `VITE_PREVIEW` flag that turns on the "Preview —
+  data is saved only in this browser" note above). Local dev and the Tauri
+  desktop app are untouched.
+
+  This is a SOFT gate only, not real security: the username, the password
+  hash, and this entire script are plainly visible and editable via
+  devtools/view-source, and localStorage can be read or cleared by anyone
+  with access to the browser. It only keeps a casual visitor from opening a
+  public preview link — never rely on it to protect anything sensitive.
+-->
+<style>
+  #authgateOverlay{
+    position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;
+    background:rgba(20,16,8,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  }
+  #authgateOverlay[hidden]{display:none;}
+  body.authgate-locked .shell,
+  body.authgate-locked #toast{display:none;}
+  .authgate-box{
+    width:min(360px,92vw);background:var(--panel,#fbf8f2);border:1px solid var(--sand,#e7dfd0);
+    border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28);padding:28px 26px;
+    font-family:'Inter',sans-serif;color:var(--ink,#221f19);
+  }
+  .authgate-box h2{margin:0 0 6px;font-size:19px;font-family:'Fraunces',serif;font-weight:600;}
+  .authgate-box p.authgate-hint{margin:0 0 18px;font-size:13px;color:var(--ink-muted,#63594a);}
+  .authgate-box label{
+    display:block;font-size:12.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--ink-muted,#63594a);margin-bottom:5px;
+  }
+  .authgate-box input{
+    width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:14px;
+    border:1px solid var(--sand,#e7dfd0);border-radius:10px;
+    background:var(--panel-soft,#f4efe4);color:var(--ink,#221f19);font-size:15px;outline:none;
+  }
+  .authgate-box input:focus{border-color:var(--gold-2,#eea23f);}
+  .authgate-box button{
+    width:100%;padding:12px;border:none;border-radius:10px;
+    background:var(--ink,#221f19);color:#f6c86a;font-size:15px;font-weight:600;cursor:pointer;
+  }
+  .authgate-box button:hover{opacity:.9;}
+  .authgate-error{color:var(--warn,#d97757);font-size:13px;margin:-6px 0 14px;min-height:16px;}
+</style>
+
+<div id="authgateOverlay" hidden>
+  <form class="authgate-box" id="authgateForm" autocomplete="off">
+    <h2 id="authgateTitle">Set up access</h2>
+    <p class="authgate-hint" id="authgateHint"></p>
+    <label for="authgateUser">Username</label>
+    <input type="text" id="authgateUser" autocomplete="username" required>
+    <label for="authgatePass">Password</label>
+    <input type="password" id="authgatePass" required>
+    <div class="authgate-error" id="authgateError"></div>
+    <button type="submit" id="authgateSubmit">Continue</button>
+  </form>
+</div>
+
 
 </body>
 </html>
