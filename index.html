@@ -254,6 +254,141 @@
 
 <div class="toast" id="toast">Saved</div>
 
+<!--
+  Soft client-side login gate — active only in the public GitHub Pages
+  preview build (the same `VITE_PREVIEW` flag that turns on the "Preview —
+  data is saved only in this browser" note above). Local dev and the Tauri
+  desktop app are untouched.
+
+  This is a SOFT gate only, not real security: the username, the password
+  hash, and this entire script are plainly visible and editable via
+  devtools/view-source, and localStorage can be read or cleared by anyone
+  with access to the browser. It only keeps a casual visitor from opening a
+  public preview link — never rely on it to protect anything sensitive.
+-->
+<style>
+  #authgateOverlay{
+    position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;
+    background:rgba(20,16,8,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  }
+  #authgateOverlay[hidden]{display:none;}
+  body.authgate-locked .shell,
+  body.authgate-locked #toast{display:none;}
+  .authgate-box{
+    width:min(360px,92vw);background:var(--panel,#fbf8f2);border:1px solid var(--sand,#e7dfd0);
+    border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28);padding:28px 26px;
+    font-family:'Inter',sans-serif;color:var(--ink,#221f19);
+  }
+  .authgate-box h2{margin:0 0 6px;font-size:19px;font-family:'Fraunces',serif;font-weight:600;}
+  .authgate-box p.authgate-hint{margin:0 0 18px;font-size:13px;color:var(--ink-muted,#63594a);}
+  .authgate-box label{
+    display:block;font-size:12.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--ink-muted,#63594a);margin-bottom:5px;
+  }
+  .authgate-box input{
+    width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:14px;
+    border:1px solid var(--sand,#e7dfd0);border-radius:10px;
+    background:var(--panel-soft,#f4efe4);color:var(--ink,#221f19);font-size:15px;outline:none;
+  }
+  .authgate-box input:focus{border-color:var(--gold-2,#eea23f);}
+  .authgate-box button{
+    width:100%;padding:12px;border:none;border-radius:10px;
+    background:var(--ink,#221f19);color:#f6c86a;font-size:15px;font-weight:600;cursor:pointer;
+  }
+  .authgate-box button:hover{opacity:.9;}
+  .authgate-error{color:var(--warn,#d97757);font-size:13px;margin:-6px 0 14px;min-height:16px;}
+</style>
+
+<div id="authgateOverlay" hidden>
+  <form class="authgate-box" id="authgateForm" autocomplete="off">
+    <h2 id="authgateTitle">Set up access</h2>
+    <p class="authgate-hint" id="authgateHint"></p>
+    <label for="authgateUser">Username</label>
+    <input type="text" id="authgateUser" autocomplete="username" required>
+    <label for="authgatePass">Password</label>
+    <input type="password" id="authgatePass" required>
+    <div class="authgate-error" id="authgateError"></div>
+    <button type="submit" id="authgateSubmit">Continue</button>
+  </form>
+</div>
+
+<script type="module">
+  // See the comment above authgateOverlay: soft gate, preview build only,
+  // not real security.
+  if (import.meta.env.VITE_PREVIEW) {
+    const LS_USER = 'gb_authgate_user';
+    const LS_HASH = 'gb_authgate_hash';
+
+    async function sha256Hex(text) {
+      const bytes = new TextEncoder().encode(text);
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    const overlay = document.getElementById('authgateOverlay');
+    const form = document.getElementById('authgateForm');
+    const title = document.getElementById('authgateTitle');
+    const hint = document.getElementById('authgateHint');
+    const userInput = document.getElementById('authgateUser');
+    const passInput = document.getElementById('authgatePass');
+    const submitBtn = document.getElementById('authgateSubmit');
+    const errorEl = document.getElementById('authgateError');
+
+    const savedUser = localStorage.getItem(LS_USER);
+    const savedHash = localStorage.getItem(LS_HASH);
+    const mode = (savedUser && savedHash) ? 'login' : 'setup';
+
+    if (mode === 'setup') {
+      title.textContent = 'Set up access';
+      hint.textContent = 'This is a shared preview link — set a username and password to open it.';
+      submitBtn.textContent = 'Set username & password';
+      passInput.autocomplete = 'new-password';
+    } else {
+      title.textContent = 'Log in';
+      hint.textContent = 'Enter the username and password for this preview link.';
+      submitBtn.textContent = 'Log in';
+      passInput.autocomplete = 'current-password';
+    }
+
+    // Not dismissible: the overlay has no close button, and — deliberately —
+    // nothing here listens for a backdrop click or an Escape keypress. The
+    // only way past it is the form below.
+    document.body.classList.add('authgate-locked');
+    overlay.hidden = false;
+    userInput.focus();
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      const user = userInput.value.trim();
+      const pass = passInput.value;
+      if (!user || !pass.trim()) {
+        errorEl.textContent = 'Enter a username and password.';
+        return;
+      }
+
+      const hash = await sha256Hex(pass);
+
+      if (mode === 'setup') {
+        localStorage.setItem(LS_USER, user);
+        localStorage.setItem(LS_HASH, hash);
+        unlock();
+      } else if (user === savedUser && hash === savedHash) {
+        unlock();
+      } else {
+        errorEl.textContent = 'Wrong username or password.';
+        passInput.value = '';
+        passInput.focus();
+      }
+    });
+
+    function unlock() {
+      overlay.hidden = true;
+      document.body.classList.remove('authgate-locked');
+    }
+  }
+</script>
+
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -38,6 +38,18 @@ One-time repo setup: **Settings → Pages → Source → "Deploy from a branch" 
 <https://joegramming.github.io/grading-system-proto/> (relative `base` in
 `vite.config.js` makes the repo sub-path work).
 
+**Login gate** — since that URL is public, the `--mode pages` build also shows
+a client-side login gate (inline in `index.html`, gated on the same
+`VITE_PREVIEW` flag — local dev and the Tauri desktop app never see it). First
+visitor sets a username + password, hashed with `crypto.subtle` (SHA-256)
+before it's saved to `localStorage`; every later visit re-prompts for them,
+with no "stay logged in." This is a **soft gate only** — the code, the
+username, and the hash are all plainly visible via devtools/view-source, and
+`localStorage` can be read or cleared by anyone with the browser open. It just
+keeps a casual visitor from opening the link, nothing more. To reset it
+(new password, or locked out), clear `gb_authgate_user` / `gb_authgate_hash`
+from the site's `localStorage` in devtools.
+
 ## Layout
 
 ```
